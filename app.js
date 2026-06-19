@@ -62,11 +62,13 @@ const categoryGroups = [
 ];
 
 const storageKeys = {
-  members: "family-bistro-members",
   member: "family-bistro-current-member",
   cart: "family-bistro-cart",
   orders: "family-bistro-orders",
 };
+
+const FAMILY_MEMBERS = ["我", "老婆"];
+const storedMember = localStorage.getItem(storageKeys.member);
 
 const state = {
   activeView: "menu",
@@ -74,10 +76,20 @@ const state = {
   query: "",
   orderTab: "all",
   selectedChore: null,
-  members: load(storageKeys.members, ["我", "妈妈", "爸爸"]),
-  currentMember: localStorage.getItem(storageKeys.member) || "我",
+  selectedJoinMember: FAMILY_MEMBERS.includes(storedMember) ? storedMember : "我",
+  members: FAMILY_MEMBERS,
+  currentMember: FAMILY_MEMBERS.includes(storedMember) ? storedMember : "我",
   cart: load(storageKeys.cart, {}),
   orders: load(storageKeys.orders, []),
+};
+
+const cloud = {
+  client: null,
+  user: null,
+  householdId: null,
+  channel: null,
+  configured: false,
+  ready: false,
 };
 
 const els = {
@@ -99,13 +111,17 @@ const els = {
   orderNote: document.querySelector("#orderNote"),
   memberSheet: document.querySelector("#memberSheet"),
   memberList: document.querySelector("#memberList"),
-  newMemberInput: document.querySelector("#newMemberInput"),
   choreSheet: document.querySelector("#choreSheet"),
   selectedChore: document.querySelector("#selectedChore"),
   choreAssignee: document.querySelector("#choreAssignee"),
   choreDue: document.querySelector("#choreDue"),
   choreNote: document.querySelector("#choreNote"),
+  joinSheet: document.querySelector("#joinSheet"),
+  joinMemberList: document.querySelector("#joinMemberList"),
+  familyInviteCode: document.querySelector("#familyInviteCode"),
+  joinFamilyButton: document.querySelector("#joinFamilyButton"),
   memberGreeting: document.querySelector("#memberGreeting"),
+  syncStatus: document.querySelector("#syncStatus"),
   sheetBackdrop: document.querySelector("#sheetBackdrop"),
   toast: document.querySelector("#toast"),
 };
@@ -121,6 +137,199 @@ function load(key, fallback) {
 
 function save(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function setSyncStatus(mode, text) {
+  els.syncStatus.className = `sync-status sync-${mode}`;
+  els.syncStatus.querySelector("span").textContent = text;
+}
+
+function cloudConfig() {
+  const config = window.FAMILY_CLOUD_CONFIG || {};
+  return {
+    url: String(config.supabaseUrl || "").trim(),
+    key: String(config.supabaseAnonKey || "").trim(),
+  };
+}
+
+function cloudOrderFromRow(row) {
+  return {
+    ...row.payload,
+    id: row.id,
+    type: row.order_type,
+    createdAt: row.created_at,
+    createdBy: row.created_by_name,
+    status: row.status,
+    assignee: row.assignee_name || "",
+  };
+}
+
+async function loadCloudOrders() {
+  if (!cloud.ready) return;
+  const { data, error } = await cloud.client
+    .from("family_orders")
+    .select("*")
+    .eq("household_id", cloud.householdId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    setSyncStatus("error", "同步暂时中断");
+    return;
+  }
+
+  state.orders = data.map(cloudOrderFromRow);
+  save(storageKeys.orders, state.orders);
+  renderOrders();
+  setSyncStatus("online", "夫妻订单已实时同步");
+}
+
+async function connectHousehold(membership) {
+  cloud.householdId = membership.household_id;
+  state.currentMember = membership.display_name;
+  state.selectedJoinMember = membership.display_name;
+  localStorage.setItem(storageKeys.member, state.currentMember);
+  cloud.ready = true;
+  renderMembers();
+  await loadCloudOrders();
+
+  if (cloud.channel) await cloud.client.removeChannel(cloud.channel);
+  cloud.channel = cloud.client
+    .channel(`family-orders-${cloud.householdId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "family_orders",
+        filter: `household_id=eq.${cloud.householdId}`,
+      },
+      () => loadCloudOrders(),
+    )
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") setSyncStatus("online", "夫妻订单已实时同步");
+      if (["CHANNEL_ERROR", "TIMED_OUT"].includes(status)) setSyncStatus("error", "实时连接正在重试");
+    });
+}
+
+async function initCloudSync() {
+  const config = cloudConfig();
+  cloud.configured = Boolean(config.url && config.key);
+
+  if (!cloud.configured) {
+    setSyncStatus("local", "本机模式 · 等待配置云同步");
+    return;
+  }
+
+  if (!window.supabase?.createClient) {
+    setSyncStatus("error", "云服务组件加载失败");
+    return;
+  }
+
+  try {
+    setSyncStatus("connecting", "正在连接家庭订单");
+    cloud.client = window.supabase.createClient(config.url, config.key, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    });
+
+    let {
+      data: { session },
+    } = await cloud.client.auth.getSession();
+
+    if (!session) {
+      const { data, error } = await cloud.client.auth.signInAnonymously();
+      if (error) throw error;
+      session = data.session;
+    }
+
+    cloud.user = session.user;
+    const { data: membership, error } = await cloud.client
+      .from("family_members")
+      .select("household_id, display_name")
+      .eq("user_id", cloud.user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!membership) {
+      setSyncStatus("joining", "请选择身份并加入家庭");
+      openSheet(els.joinSheet);
+      return;
+    }
+
+    await connectHousehold(membership);
+  } catch (error) {
+    console.error("家庭订单连接失败", error);
+    setSyncStatus("error", "云同步连接失败");
+    showToast("云同步暂时未连接，本机订单仍然保留");
+  }
+}
+
+async function joinFamily() {
+  const inviteCode = els.familyInviteCode.value.trim();
+  if (!inviteCode) {
+    showToast("请输入家庭邀请码");
+    return;
+  }
+
+  els.joinFamilyButton.disabled = true;
+  els.joinFamilyButton.textContent = "正在加入…";
+  const { data: householdId, error } = await cloud.client.rpc("join_family_household", {
+    invite_code: inviteCode,
+    member_name: state.selectedJoinMember,
+  });
+  els.joinFamilyButton.disabled = false;
+  els.joinFamilyButton.textContent = "加入家庭并开始同步";
+
+  if (error) {
+    showToast(error.message.includes("邀请码") ? "家庭邀请码不正确" : "加入失败，请检查 Supabase 设置");
+    return;
+  }
+
+  els.familyInviteCode.value = "";
+  closeSheets();
+  await connectHousehold({ household_id: householdId, display_name: state.selectedJoinMember });
+  showToast("连接成功，你们现在能看到彼此的订单了");
+}
+
+async function createCloudOrder(order) {
+  if (!cloud.ready) return true;
+  const { error } = await cloud.client.from("family_orders").insert({
+    id: order.id,
+    household_id: cloud.householdId,
+    created_by: cloud.user.id,
+    created_by_name: state.currentMember,
+    order_type: order.type,
+    payload: order,
+    status: order.status,
+    assignee_name: order.assignee || "",
+  });
+  if (error) {
+    setSyncStatus("error", "订单未同步，正在保留本机副本");
+    console.error("订单上传失败", error);
+    return false;
+  }
+  return true;
+}
+
+async function updateCloudOrder(order, action) {
+  if (!cloud.ready) return true;
+  const changes = {
+    payload: order,
+    status: order.status,
+    assignee_name: order.assignee || "",
+    updated_at: new Date().toISOString(),
+  };
+  if (action === "claim") changes.assignee_id = cloud.user.id;
+  const { error } = await cloud.client
+    .from("family_orders")
+    .update(changes)
+    .eq("id", order.id);
+  if (error) {
+    setSyncStatus("error", "状态未同步，请稍后重试");
+    console.error("订单状态更新失败", error);
+    return false;
+  }
+  return true;
 }
 
 function escapeHtml(value = "") {
@@ -267,11 +476,21 @@ function changeCart(id, delta) {
 }
 
 function renderMembers() {
-  const colors = ["#c84f36", "#38694c", "#ca8a32", "#72599a", "#3a7180", "#9a526b"];
+  const colors = ["#38694c", "#c84f36"];
   els.memberList.innerHTML = state.members
     .map(
       (member, index) => `
-        <button class="member-option ${member === state.currentMember ? "active" : ""}" data-member="${escapeHtml(member)}">
+        <button class="member-option ${member === state.currentMember ? "active" : ""}" data-member="${escapeHtml(member)}"
+          ${cloud.ready && member !== state.currentMember ? "disabled" : ""}>
+          <span class="member-avatar" style="--avatar:${colors[index % colors.length]}">${escapeHtml(member.slice(0, 1))}</span>
+          ${escapeHtml(member)}
+        </button>`,
+    )
+    .join("");
+  els.joinMemberList.innerHTML = state.members
+    .map(
+      (member, index) => `
+        <button class="member-option ${member === state.selectedJoinMember ? "active" : ""}" data-join-member="${escapeHtml(member)}">
           <span class="member-avatar" style="--avatar:${colors[index % colors.length]}">${escapeHtml(member.slice(0, 1))}</span>
           ${escapeHtml(member)}
         </button>`,
@@ -379,9 +598,14 @@ function showToast(message) {
   toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2400);
 }
 
-function submitFoodOrder() {
+async function submitFoodOrder() {
   const items = cartDetails();
   if (!items.length) return;
+  if (cloud.configured && !cloud.ready) {
+    showToast("请先连接家庭订单");
+    openSheet(els.joinSheet);
+    return;
+  }
   const order = {
     id: crypto.randomUUID ? crypto.randomUUID() : `food-${Date.now()}`,
     type: "food",
@@ -400,7 +624,8 @@ function submitFoodOrder() {
   els.orderNote.value = "";
   closeSheets();
   renderAll();
-  showToast("点单成功，等家里大厨接单啦");
+  const synced = await createCloudOrder(order);
+  showToast(synced ? "点单成功，另一位成员现在能看见啦" : "订单已保存在本机，但暂未同步");
   showView("orders");
 }
 
@@ -414,8 +639,13 @@ function openChoreSheet(choreId) {
   openSheet(els.choreSheet);
 }
 
-function dispatchChore() {
+async function dispatchChore() {
   if (!state.selectedChore) return;
+  if (cloud.configured && !cloud.ready) {
+    showToast("请先连接家庭订单");
+    openSheet(els.joinSheet);
+    return;
+  }
   let title = state.selectedChore.name;
   const note = els.choreNote.value.trim();
   if (state.selectedChore.id === "custom" && note) title = note.slice(0, 18);
@@ -438,11 +668,12 @@ function dispatchChore() {
   save(storageKeys.orders, state.orders);
   closeSheets();
   renderOrders();
-  showToast(`“${title}”已经派出去啦`);
+  const synced = await createCloudOrder(order);
+  showToast(synced ? `“${title}”已经同步给家人` : "任务已保存在本机，但暂未同步");
   showView("orders");
 }
 
-function orderAction(orderId, action) {
+async function orderAction(orderId, action) {
   const order = state.orders.find((item) => item.id === orderId);
   if (!order) return;
   if (action === "claim") {
@@ -457,6 +688,7 @@ function orderAction(orderId, action) {
   if (action === "share") shareOrder(order);
   save(storageKeys.orders, state.orders);
   renderOrders();
+  if (action !== "share") await updateCloudOrder(order, action);
 }
 
 function orderShareText(order) {
@@ -512,11 +744,21 @@ document.addEventListener("click", (event) => {
 
   const member = event.target.closest("[data-member]");
   if (member) {
+    if (cloud.ready && member.dataset.member !== state.currentMember) {
+      showToast("云同步身份已绑定；如需更换，请清除该网站的数据后重新加入");
+      return;
+    }
     state.currentMember = member.dataset.member;
     localStorage.setItem(storageKeys.member, state.currentMember);
     renderMembers();
     closeSheets();
     showToast(`已切换为 ${state.currentMember}`);
+  }
+
+  const joinMember = event.target.closest("[data-join-member]");
+  if (joinMember) {
+    state.selectedJoinMember = joinMember.dataset.joinMember;
+    renderMembers();
   }
 
   const action = event.target.closest("[data-order-action]");
@@ -552,27 +794,10 @@ document.querySelector("#clearCartButton").addEventListener("click", () => {
 });
 document.querySelector("#submitOrderButton").addEventListener("click", submitFoodOrder);
 document.querySelector("#dispatchChoreButton").addEventListener("click", dispatchChore);
+document.querySelector("#joinFamilyButton").addEventListener("click", joinFamily);
 document.querySelector("#shareAppButton").addEventListener("click", () =>
   shareContent("来 502 家庭小馆点菜、接家务啦！"),
 );
-
-document.querySelector("#addMemberForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  const name = els.newMemberInput.value.trim();
-  if (!name) return;
-  if (state.members.includes(name)) {
-    showToast("这个名字已经在家庭成员里啦");
-    return;
-  }
-  state.members.push(name);
-  state.currentMember = name;
-  save(storageKeys.members, state.members);
-  localStorage.setItem(storageKeys.member, name);
-  els.newMemberInput.value = "";
-  renderMembers();
-  closeSheets();
-  showToast(`欢迎 ${name} 加入家庭小馆`);
-});
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeSheets();
@@ -583,3 +808,4 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 }
 
 renderAll();
+initCloudSync();

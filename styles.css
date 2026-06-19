@@ -115,6 +115,51 @@ button {
   font-size: 11px;
 }
 
+.sync-status {
+  display: flex !important;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px !important;
+  font-size: 9px !important;
+}
+
+.sync-status i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  background: #b1a69e;
+  border-radius: 50%;
+}
+
+.sync-online {
+  color: var(--green) !important;
+}
+
+.sync-online i {
+  background: #49a16b;
+  box-shadow: 0 0 0 3px rgba(73, 161, 107, 0.13);
+}
+
+.sync-connecting i,
+.sync-joining i {
+  background: var(--yellow);
+  animation: sync-pulse 1.2s infinite;
+}
+
+.sync-error {
+  color: var(--red) !important;
+}
+
+.sync-error i {
+  background: var(--red);
+}
+
+@keyframes sync-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .icon-button {
   display: grid;
   width: 42px;
@@ -1112,7 +1157,7 @@ main {
 
 .member-list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
 
@@ -1129,6 +1174,11 @@ main {
   color: var(--red);
   background: #fbede8;
   border-color: rgba(200, 79, 54, 0.3);
+}
+
+.member-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .member-avatar {
@@ -1166,6 +1216,36 @@ main {
   border: 0;
   border-radius: 12px;
   font-weight: 800;
+}
+
+.sheet-note,
+.join-copy {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.sheet-note {
+  margin: 14px 2px 0;
+  text-align: center;
+}
+
+.join-copy {
+  margin: -4px 0 14px;
+}
+
+.join-members {
+  margin-bottom: 15px;
+}
+
+.field input {
+  width: 100%;
+  padding: 12px 13px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  outline: none;
+  font-size: 13px;
 }
 
 .selected-chore {

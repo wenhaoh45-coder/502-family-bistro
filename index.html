@@ -17,6 +17,9 @@
           <span>
             <strong>家庭小馆</strong>
             <small id="memberGreeting">今天想吃点什么？</small>
+            <small class="sync-status" id="syncStatus">
+              <i></i><span>正在连接家庭订单</span>
+            </small>
           </span>
         </button>
         <button class="icon-button" id="shareAppButton" aria-label="分享家庭小馆">
@@ -157,10 +160,7 @@
         </div>
       </header>
       <div class="member-list" id="memberList"></div>
-      <form class="inline-form" id="addMemberForm">
-        <input id="newMemberInput" maxlength="8" placeholder="添加家人名字" required />
-        <button type="submit">添加</button>
-      </form>
+      <p class="sheet-note">这个家只有两位成员。请在自己的手机上选择固定身份，订单会显示给另一位成员。</p>
     </section>
 
     <section class="bottom-sheet compact-sheet" id="choreSheet" aria-labelledby="choreTitle">
@@ -193,7 +193,27 @@
       <button class="primary-button" id="dispatchChoreButton">确认派单</button>
     </section>
 
+    <section class="bottom-sheet compact-sheet" id="joinSheet" aria-labelledby="joinTitle">
+      <div class="sheet-handle"></div>
+      <header class="sheet-header">
+        <div>
+          <span class="eyebrow">连接你们的小家</span>
+          <h2 id="joinTitle">第一次使用</h2>
+        </div>
+      </header>
+      <p class="join-copy">选择你在家庭小馆里的身份，再输入两个人共用的家庭邀请码。</p>
+      <div class="member-list join-members" id="joinMemberList"></div>
+      <label class="field">
+        <span>家庭邀请码</span>
+        <input id="familyInviteCode" type="password" autocomplete="one-time-code" placeholder="输入你们约定的邀请码" />
+      </label>
+      <button class="primary-button" id="joinFamilyButton">加入家庭并开始同步</button>
+      <p class="sheet-note">邀请码只在首次加入时使用，不会保存在网页代码中。</p>
+    </section>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./cloud-config.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
