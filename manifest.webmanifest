@@ -1,0 +1,18 @@
+{
+  "name": "502 家庭小馆",
+  "short_name": "家庭小馆",
+  "description": "家人点菜、派家务、接单与完成任务。",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fffaf2",
+  "theme_color": "#fffaf2",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "./assets/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

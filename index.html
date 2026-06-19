@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#fffaf2" />
+    <meta name="description" content="502 家庭小馆：家人点菜、派家务、接单与完成任务。" />
+    <title>502 家庭小馆</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="family-brand" id="memberButton" aria-label="切换当前家庭成员">
+          <span class="brand-mark">502</span>
+          <span>
+            <strong>家庭小馆</strong>
+            <small id="memberGreeting">今天想吃点什么？</small>
+          </span>
+        </button>
+        <button class="icon-button" id="shareAppButton" aria-label="分享家庭小馆">
+          <span aria-hidden="true">↗</span>
+        </button>
+      </header>
+
+      <main>
+        <section class="view active" id="menuView" data-view="menu">
+          <div class="hero">
+            <div class="hero-copy">
+              <span class="eyebrow">欢迎光临 · 自家人不排队</span>
+              <h1>今天，家里<br />谁掌勺？</h1>
+              <p>点喜欢的菜，备注口味，家人接单后就开火。</p>
+              <button class="hero-action" data-scroll-to-menu>开始点菜 <span>→</span></button>
+            </div>
+            <div class="hero-art" aria-hidden="true">
+              <div class="plate">
+                <span class="food food-a"></span>
+                <span class="food food-b"></span>
+                <span class="food food-c"></span>
+                <span class="food food-d"></span>
+              </div>
+              <span class="steam steam-a"></span>
+              <span class="steam steam-b"></span>
+              <span class="leaf leaf-a"></span>
+              <span class="leaf leaf-b"></span>
+            </div>
+          </div>
+
+          <div class="section-heading" id="dishMenu">
+            <div>
+              <span class="eyebrow">家常菜单</span>
+              <h2>想吃什么，尽管点</h2>
+            </div>
+            <span class="dish-count" id="dishCount"></span>
+          </div>
+
+          <label class="search-box">
+            <span aria-hidden="true">⌕</span>
+            <input id="dishSearch" type="search" placeholder="搜索牛肉、排骨、汤……" autocomplete="off" />
+          </label>
+
+          <div class="category-strip" id="categoryStrip" aria-label="菜品分类"></div>
+          <div class="dish-grid" id="dishGrid"></div>
+          <div class="empty-state hidden" id="dishEmpty">
+            <span>🍽️</span>
+            <strong>没找到这道菜</strong>
+            <p>换个关键词试试，或者给家里大厨提个新菜单。</p>
+          </div>
+        </section>
+
+        <section class="view" id="choresView" data-view="chores">
+          <div class="page-intro chores-intro">
+            <span class="eyebrow">家庭协作站</span>
+            <h1>家务也能<br />轻松派单</h1>
+            <p>任务说清楚，谁有空谁接单。做完记得给一个大大的赞。</p>
+          </div>
+          <div class="chore-grid" id="choreGrid"></div>
+          <div class="gentle-note">
+            <span>💡</span>
+            <p><strong>家庭小约定</strong><br />积分只是增加一点仪式感，真心感谢才是隐藏大奖。</p>
+          </div>
+        </section>
+
+        <section class="view" id="ordersView" data-view="orders">
+          <div class="page-intro orders-intro">
+            <span class="eyebrow">厨房与任务看板</span>
+            <h1>今日订单</h1>
+            <p>接单、开工、完成，一眼看清家里的大小事情。</p>
+          </div>
+          <div class="segmented-control" id="orderTabs">
+            <button class="active" data-order-tab="all">全部</button>
+            <button data-order-tab="food">点菜</button>
+            <button data-order-tab="chore">家务</button>
+          </div>
+          <div class="order-list" id="orderList"></div>
+          <div class="empty-state" id="orderEmpty">
+            <span>🧾</span>
+            <strong>今天还没有订单</strong>
+            <p>第一单，就从一道想吃的菜或一件顺手的家务开始。</p>
+          </div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="主导航">
+        <button class="active" data-nav="menu">
+          <span class="nav-icon">⌂</span>
+          <span>点菜</span>
+        </button>
+        <button data-nav="chores">
+          <span class="nav-icon">✓</span>
+          <span>家务</span>
+        </button>
+        <button data-nav="orders">
+          <span class="nav-icon">▤</span>
+          <span>订单</span>
+          <i class="nav-badge hidden" id="orderBadge">0</i>
+        </button>
+      </nav>
+
+      <button class="cart-fab hidden" id="cartFab" aria-label="查看购物车">
+        <span class="cart-icon">🛒</span>
+        <span><strong id="cartCount">0</strong> 道菜</span>
+        <b id="cartTotal">¥0</b>
+      </button>
+    </div>
+
+    <div class="sheet-backdrop hidden" id="sheetBackdrop"></div>
+
+    <section class="bottom-sheet" id="cartSheet" aria-labelledby="cartTitle">
+      <div class="sheet-handle"></div>
+      <header class="sheet-header">
+        <div>
+          <span class="eyebrow">本次点单</span>
+          <h2 id="cartTitle">我的餐桌</h2>
+        </div>
+        <button class="text-button" id="clearCartButton">清空</button>
+      </header>
+      <div class="cart-list" id="cartList"></div>
+      <label class="field">
+        <span>口味 / 备注</span>
+        <textarea id="orderNote" rows="2" placeholder="例如：少油少盐、不要香菜、米饭两碗"></textarea>
+      </label>
+      <div class="checkout-summary">
+        <span>合计</span>
+        <strong id="checkoutTotal">¥0</strong>
+      </div>
+      <button class="primary-button" id="submitOrderButton">下单，请家人接单</button>
+    </section>
+
+    <section class="bottom-sheet compact-sheet" id="memberSheet" aria-labelledby="memberTitle">
+      <div class="sheet-handle"></div>
+      <header class="sheet-header">
+        <div>
+          <span class="eyebrow">当前身份</span>
+          <h2 id="memberTitle">你是谁？</h2>
+        </div>
+      </header>
+      <div class="member-list" id="memberList"></div>
+      <form class="inline-form" id="addMemberForm">
+        <input id="newMemberInput" maxlength="8" placeholder="添加家人名字" required />
+        <button type="submit">添加</button>
+      </form>
+    </section>
+
+    <section class="bottom-sheet compact-sheet" id="choreSheet" aria-labelledby="choreTitle">
+      <div class="sheet-handle"></div>
+      <header class="sheet-header">
+        <div>
+          <span class="eyebrow">派一件家务</span>
+          <h2 id="choreTitle">家务任务</h2>
+        </div>
+      </header>
+      <div class="selected-chore" id="selectedChore"></div>
+      <label class="field">
+        <span>希望谁来做</span>
+        <select id="choreAssignee"></select>
+      </label>
+      <label class="field">
+        <span>什么时候完成</span>
+        <select id="choreDue">
+          <option value="今天">今天</option>
+          <option value="饭前">饭前</option>
+          <option value="饭后">饭后</option>
+          <option value="睡前">睡前</option>
+          <option value="本周内">本周内</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>补充说明</span>
+        <textarea id="choreNote" rows="2" placeholder="例如：客厅和走廊都要拖一下"></textarea>
+      </label>
+      <button class="primary-button" id="dispatchChoreButton">确认派单</button>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
