@@ -45,7 +45,9 @@ const chores = [
   { id: "fruit", name: "洗水果", icon: "🍎", reward: 6, desc: "洗净、切好，再端到大家面前", bg: "#f7dfdc" },
   { id: "floor", name: "扫地拖地", icon: "🧹", reward: 12, desc: "地面清爽，走路都更轻快", bg: "#e4ecdb" },
   { id: "laundry", name: "洗烘衣服", icon: "🧺", reward: 10, desc: "分类、洗涤、烘干，别忘了收衣服", bg: "#dcecf1" },
-  { id: "dishes", name: "洗碗", icon: "🫧", reward: 8, desc: "餐具归位，厨房恢复清清爽爽", bg: "#e1edf5" },
+  { id: "dishes", name: "洗碗", icon: "🫧", reward: 20, desc: "餐具归位，厨房恢复清清爽爽", bg: "#e1edf5" },
+  { id: "change-sheets", name: "更换床单", icon: "🛏️", reward: 10, desc: "换下旧床单，铺好干净床品", bg: "#e8e2f3" },
+  { id: "take-out-trash", name: "倒垃圾", icon: "🗑️", reward: 10, desc: "打包垃圾并换上新的垃圾袋", bg: "#e4eadf" },
   { id: "custom", name: "其他家务", icon: "✨", reward: 8, desc: "临时任务也可以清楚地派出去", bg: "#eee4f3" },
 ];
 
