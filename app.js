@@ -67,8 +67,30 @@ const storageKeys = {
   orders: "family-bistro-orders",
 };
 
-const FAMILY_MEMBERS = ["我", "老婆"];
-const storedMember = localStorage.getItem(storageKeys.member);
+const FAMILY_MEMBERS = ["小黄", "小钱"];
+const LEGACY_MEMBER_NAMES = {
+  我: "小黄",
+  老婆: "小钱",
+};
+
+function normalizeMemberName(value = "") {
+  return LEGACY_MEMBER_NAMES[value] || value;
+}
+
+function normalizeOrderMemberNames(order) {
+  return {
+    ...order,
+    createdBy: normalizeMemberName(order.createdBy),
+    assignee: normalizeMemberName(order.assignee),
+    requestedAssignee: normalizeMemberName(order.requestedAssignee),
+  };
+}
+
+const rawStoredMember = localStorage.getItem(storageKeys.member);
+const storedMember = normalizeMemberName(rawStoredMember);
+if (storedMember && storedMember !== rawStoredMember) {
+  localStorage.setItem(storageKeys.member, storedMember);
+}
 
 const state = {
   activeView: "menu",
@@ -76,12 +98,13 @@ const state = {
   query: "",
   orderTab: "all",
   selectedChore: null,
-  selectedJoinMember: FAMILY_MEMBERS.includes(storedMember) ? storedMember : "我",
+  selectedJoinMember: FAMILY_MEMBERS.includes(storedMember) ? storedMember : "小黄",
   members: FAMILY_MEMBERS,
-  currentMember: FAMILY_MEMBERS.includes(storedMember) ? storedMember : "我",
+  currentMember: FAMILY_MEMBERS.includes(storedMember) ? storedMember : "小黄",
   cart: load(storageKeys.cart, {}),
-  orders: load(storageKeys.orders, []),
+  orders: load(storageKeys.orders, []).map(normalizeOrderMemberNames),
 };
+save(storageKeys.orders, state.orders);
 
 const cloud = {
   client: null,
@@ -158,9 +181,10 @@ function cloudOrderFromRow(row) {
     id: row.id,
     type: row.order_type,
     createdAt: row.created_at,
-    createdBy: row.created_by_name,
+    createdBy: normalizeMemberName(row.created_by_name),
     status: row.status,
-    assignee: row.assignee_name || "",
+    assignee: normalizeMemberName(row.assignee_name || ""),
+    requestedAssignee: normalizeMemberName(row.payload?.requestedAssignee || ""),
   };
 }
 
@@ -181,13 +205,14 @@ async function loadCloudOrders() {
   state.orders = data.map(cloudOrderFromRow);
   save(storageKeys.orders, state.orders);
   renderOrders();
-  setSyncStatus("online", "夫妻订单已实时同步");
+  setSyncStatus("online", "家庭订单已实时同步");
 }
 
 async function connectHousehold(membership) {
   cloud.householdId = membership.household_id;
-  state.currentMember = membership.display_name;
-  state.selectedJoinMember = membership.display_name;
+  const displayName = normalizeMemberName(membership.display_name);
+  state.currentMember = displayName;
+  state.selectedJoinMember = displayName;
   localStorage.setItem(storageKeys.member, state.currentMember);
   cloud.ready = true;
   renderMembers();
@@ -207,7 +232,7 @@ async function connectHousehold(membership) {
       () => loadCloudOrders(),
     )
     .subscribe((status) => {
-      if (status === "SUBSCRIBED") setSyncStatus("online", "夫妻订单已实时同步");
+      if (status === "SUBSCRIBED") setSyncStatus("online", "家庭订单已实时同步");
       if (["CHANNEL_ERROR", "TIMED_OUT"].includes(status)) setSyncStatus("error", "实时连接正在重试");
     });
 }
@@ -534,7 +559,7 @@ function orderTemplate(order) {
           <span>奖励：${order.reward} 家庭积分</span>
         </div>`;
   let nextAction = "";
-  if (order.status === "pending") nextAction = `<button class="small-button primary" data-order-action="claim" data-order-id="${order.id}">我来接单</button>`;
+  if (order.status === "pending") nextAction = `<button class="small-button primary" data-order-action="claim" data-order-id="${order.id}">接单</button>`;
   if (order.status === "doing") nextAction = `<button class="small-button primary" data-order-action="complete" data-order-id="${order.id}">完成啦</button>`;
   return `
     <article class="order-card">
