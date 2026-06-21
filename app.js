@@ -127,6 +127,10 @@ const els = {
   orderList: document.querySelector("#orderList"),
   orderEmpty: document.querySelector("#orderEmpty"),
   orderBadge: document.querySelector("#orderBadge"),
+  pointsSummary: document.querySelector("#pointsSummary"),
+  pointsList: document.querySelector("#pointsList"),
+  pointsEmpty: document.querySelector("#pointsEmpty"),
+  pointsTotal: document.querySelector("#pointsTotal"),
   cartFab: document.querySelector("#cartFab"),
   cartCount: document.querySelector("#cartCount"),
   cartTotal: document.querySelector("#cartTotal"),
@@ -183,6 +187,7 @@ function cloudOrderFromRow(row) {
     id: row.id,
     type: row.order_type,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     createdBy: normalizeMemberName(row.created_by_name),
     status: row.status,
     assignee: normalizeMemberName(row.assignee_name || ""),
@@ -192,21 +197,28 @@ function cloudOrderFromRow(row) {
 
 async function loadCloudOrders() {
   if (!cloud.ready) return;
-  const { data, error } = await cloud.client
-    .from("family_orders")
-    .select("*")
-    .eq("household_id", cloud.householdId)
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const rows = [];
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await cloud.client
+      .from("family_orders")
+      .select("*")
+      .eq("household_id", cloud.householdId)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
 
-  if (error) {
-    setSyncStatus("error", "同步暂时中断");
-    return;
+    if (error) {
+      setSyncStatus("error", "同步暂时中断");
+      return;
+    }
+    rows.push(...data);
+    if (data.length < pageSize) break;
   }
 
-  state.orders = data.map(cloudOrderFromRow);
+  state.orders = rows.map(cloudOrderFromRow);
   save(storageKeys.orders, state.orders);
   renderOrders();
+  renderPoints();
   setSyncStatus("online", "家庭订单已实时同步");
 }
 
@@ -539,6 +551,63 @@ function renderOrders() {
   els.orderBadge.classList.toggle("hidden", unfinished === 0);
 }
 
+function completedChorePoints() {
+  return state.orders
+    .filter((order) => order.type === "chore" && order.status === "done" && order.assignee && Number(order.reward) > 0)
+    .map((order) => ({
+      id: order.id,
+      member: normalizeMemberName(order.assignee),
+      title: order.title,
+      icon: order.icon || "✓",
+      points: Number(order.reward),
+      completedAt: order.completedAt || order.updatedAt || order.createdAt,
+    }))
+    .filter((entry) => state.members.includes(entry.member))
+    .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+}
+
+function renderPoints() {
+  const entries = completedChorePoints();
+  const totals = Object.fromEntries(state.members.map((member) => [member, 0]));
+  entries.forEach((entry) => {
+    totals[entry.member] += entry.points;
+  });
+  const ranking = state.members
+    .map((member, index) => ({ member, points: totals[member], index }))
+    .sort((a, b) => b.points - a.points || a.index - b.index);
+
+  els.pointsSummary.innerHTML = ranking
+    .map(
+      ({ member, points }, index) => `
+        <article class="points-person ${index === 0 && points > 0 ? "leader" : ""}">
+          <span class="points-rank">${index === 0 && points > 0 ? "🏆" : `#${index + 1}`}</span>
+          <span class="member-avatar" style="--avatar:${member === state.members[0] ? "#38694c" : "#c84f36"}">${escapeHtml(member.slice(0, 1))}</span>
+          <span class="points-person-copy">
+            <strong>${escapeHtml(member)}</strong>
+            <small>${entries.filter((entry) => entry.member === member).length} 次完成</small>
+          </span>
+          <b>${points}<small> 分</small></b>
+        </article>`,
+    )
+    .join("");
+
+  els.pointsList.innerHTML = entries
+    .map(
+      (entry) => `
+        <article class="points-entry">
+          <span class="points-entry-icon">${entry.icon}</span>
+          <span class="points-entry-copy">
+            <strong>${escapeHtml(entry.title)}</strong>
+            <small>${escapeHtml(entry.member)} · ${formatTime(entry.completedAt)}</small>
+          </span>
+          <b>+${entry.points}</b>
+        </article>`,
+    )
+    .join("");
+  els.pointsEmpty.classList.toggle("hidden", entries.length > 0);
+  els.pointsTotal.textContent = `累计 ${entries.reduce((sum, entry) => sum + entry.points, 0)} 分`;
+}
+
 function orderTemplate(order) {
   const statusMap = {
     pending: ["待接单", "status-pending"],
@@ -710,11 +779,13 @@ async function orderAction(orderId, action) {
   }
   if (action === "complete") {
     order.status = "done";
+    order.completedAt = new Date().toISOString();
     showToast("完成得漂亮，辛苦啦！");
   }
   if (action === "share") shareOrder(order);
   save(storageKeys.orders, state.orders);
   renderOrders();
+  renderPoints();
   if (action !== "share") await updateCloudOrder(order, action);
 }
 
@@ -750,6 +821,7 @@ function renderAll() {
   renderMembers();
   renderCart();
   renderOrders();
+  renderPoints();
 }
 
 document.addEventListener("click", (event) => {

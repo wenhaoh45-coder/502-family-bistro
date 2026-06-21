@@ -103,6 +103,28 @@
             <p>第一单，就从一道想吃的菜或一件顺手的家务开始。</p>
           </div>
         </section>
+
+        <section class="view" id="pointsView" data-view="points">
+          <div class="page-intro points-intro">
+            <span class="eyebrow">家庭积分账本</span>
+            <h1>谁是今日<br />家务之星？</h1>
+            <p>完成家务就会自动记分，每一份付出都清清楚楚。</p>
+          </div>
+          <div class="points-summary" id="pointsSummary"></div>
+          <div class="points-section-heading">
+            <div>
+              <span class="eyebrow">得分明细</span>
+              <h2>每一分都有记录</h2>
+            </div>
+            <span class="points-total" id="pointsTotal"></span>
+          </div>
+          <div class="points-list" id="pointsList"></div>
+          <div class="empty-state" id="pointsEmpty">
+            <span>⭐</span>
+            <strong>还没有积分记录</strong>
+            <p>完成一件家务后，积分和明细会自动出现在这里。</p>
+          </div>
+        </section>
       </main>
 
       <nav class="bottom-nav" aria-label="主导航">
@@ -118,6 +140,10 @@
           <span class="nav-icon">▤</span>
           <span>订单</span>
           <i class="nav-badge hidden" id="orderBadge">0</i>
+        </button>
+        <button data-nav="points">
+          <span class="nav-icon">☆</span>
+          <span>积分</span>
         </button>
       </nav>
 

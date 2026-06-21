@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-bistro-v8";
+const CACHE_NAME = "family-bistro-v9";
 const DISH_IMAGES = [
   "stir-fried-beef",
   "pepper-pork",
